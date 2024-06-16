@@ -283,7 +283,7 @@ DEFINE CLASS WinClass AS Custom
 	    LOCAL nSessionID
 	    nSessionID = WinClass_WTSGetActiveConsoleSessionId(2)
 	    
-	    Release WinClass_WTSGetActiveConsoleSessionId
+	    CLEAR DLLS "WinClass_WTSGetActiveConsoleSessionId"
 	    
 	    RETURN nSessionID
 	EndProc 
@@ -314,7 +314,7 @@ DEFINE CLASS WinClass AS Custom
 		lcValue = This.ParseBuffer(lc_Buffer, ln_pBytesReturned) 
 		lcValue = Substr(lcValue, 1, At(This.Null, lcValue)-1)
 		
-		Release WinClass_WTSQuerySessionInformation   
+		CLEAR DLLS "WinClass_WTSQuerySessionInformation"
 		
 		Return lcValue
 	Endproc
@@ -342,7 +342,7 @@ DEFINE CLASS WinClass AS Custom
 		
 		WinClass_RtlMoveMemory(@lcDataBuf, pln_Buffer, ln_BufLength) &&LEFT(lcBuffer, lnBytesReturned - 1)
 		
-		Release WinClass_RtlMoveMemory
+		CLEAR DLLS "WinClass_RtlMoveMemory"
 		
 		Return lcDataBuf
 	Endproc
@@ -394,7 +394,7 @@ DEFINE CLASS WinClass AS Custom
 	    
 	    EndFor
 		
-		Release WinClass_WTSEnumerateSessions
+		CLEAR DLLS "WinClass_WTSEnumerateSessions"
 		
 		Return ln_pCount
 	Endproc
@@ -413,7 +413,7 @@ DEFINE CLASS WinClass AS Custom
 		
 		lnObjSize = WinClass_GlobalSize(plm_MemObj)
 		
-		Release WinClass_GlobalSize
+		CLEAR DLLS "WinClass_GlobalSize"
 		
 		Return lnObjSize
 	Endproc
@@ -430,7 +430,7 @@ DEFINE CLASS WinClass AS Custom
 		
 		WinClass_WTSFreeMemory(pln_Pointer)
 	
-		Release WinClass_WTSFreeMemory
+		CLEAR DLLS "WinClass_WTSFreeMemory"
 	Endproc
 	
 ENDDEFINE
