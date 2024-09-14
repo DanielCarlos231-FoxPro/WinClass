@@ -10,8 +10,15 @@ winClaas = CreateObject("WinClass")
 *Local loAllSessions(1)
 *winClaas.GetAllSessions(@loAllSessions)
 *****************************************
+*MessageBox(winClaas.GetConsoleSessionID())
+*****************************************
+LOCAL loAllProcesses(1)
+winClaas.GetSystemProcesses(@loAllProcesses, "As_Retag.exe")
+******************************************
+*LOCAL aWindowHandles(1)
+*MESSAGEBOX(winClaas.GetWindowByProcessID(19580, @aWindowHandles))
 
-MessageBox(winClaas.GetCurrentSessionID())
+
 Set Step On 
 
 DEFINE CLASS WinClass AS Custom
@@ -36,7 +43,12 @@ DEFINE CLASS WinClass AS Custom
 	#DEFINE WTS_Reset					7			&&& The session is in the process of resetting
 	#DEFINE WTS_Down					8			&&& The session is currently down
 	#DEFINE WTS_Init					9			&&& The session is initializing
-		
+	
+	#DEFINE GWL_STYLE 					-16			&&& Type of Style [Visible or not Visible]
+	#DEFINE WS_VISIBLE 					0x10000000 	&&& Windows Visible Style
+	#DEFINE GW_HWNDNEXT 				2			&&& Next Windows
+
+	
 	PROCEDURE Init
 		* Definir
 		This.Pointer = Replicate(This.Null, This.ByteSize)
@@ -52,6 +64,193 @@ DEFINE CLASS WinClass AS Custom
 	
 	*********************************************************************************
 	
+	*** <summary>
+	*** Returns an array with the windows information
+	*** </summary>
+	*** <param name="nProcessID">Process ID of the EXE</param>
+	*** <param name="aWindowHandles">Array to sabe the informations</param>
+	*** <remarks></remarks>
+	FUNCTION GetWindowByProcessID
+	    LPARAMETERS nProcessID, aWindowHandles
+	        
+		LOCAL hWnd, nWindowProcessID, nCurrentProcessID, lnX, lcCaption
+		STORE 0 TO hWnd, nWindowProcessID, nCurrentProcessID, lnX
+		lcCaption = ""
+		
+	    aWindowHandles[1] = 0  
+	    hWnd = This.GetNextWindow(hWnd) 
+
+	    DO WHILE hWnd > 0
+	        
+	        nWindowProcessID = This.GetWindowThreadProcessId(hWnd)
+
+			IF nWindowProcessID <> nProcessID
+	        	hWnd = This.GetNextWindow(hWnd)
+	        	LOOP 
+	        ENDIF
+	        
+	        && Check if windows is visible
+	        IF NOT This.IsVisibleWindow(hWnd)
+	        	hWnd = This.GetNextWindow(hWnd)
+	        	LOOP 
+	        ENDIF
+	        
+	        lcCaption = This.GetWindowText(hWnd)
+	        
+	        IF Empty(lcCaption)
+	        	hWnd = This.GetNextWindow(hWnd)
+	        	LOOP 
+	        ENDIF
+	        
+	        lnX = lnX + 1
+			DIMENSION aWindowHandles[lnX]
+	        aWindowHandles[lnX] = CREATEOBJECT("empty")
+	        ADDPROPERTY(aWindowHandles[lnX],"Handle",hWnd)
+	        ADDPROPERTY(aWindowHandles[lnX],"Caption", lcCaption)
+	        hWnd = This.GetNextWindow(hWnd)
+	    ENDDO
+	    
+	    RETURN aWindowHandles
+	ENDFUNC
+
+	*** <summary>
+	*** Returns Next Window
+	*** </summary>
+	*** <param name="hWndCurrent">Current window handle</param>
+	*** <remarks></remarks>
+	FUNCTION GetNextWindow
+	    LPARAMETERS hWndCurrent
+	    
+	    LOCAL lnHandle
+	    lnHandle = 0
+	    
+	    IF hWndCurrent = 0
+	        lnHandle = This.FindWindow(NULL, NULL)  && Start with the first window
+	    ELSE
+	        lnHandle = This.GetWindow(hWndCurrent, GW_HWNDNEXT)
+	    ENDIF
+	    
+	    RETURN lnHandle
+	ENDFUNC
+
+	*** <summary>
+	*** Checks if the window is Visible
+	*** </summary>
+	*** <param name="pln_Handle">Window Handle</param>
+	*** <remarks></remarks>
+	FUNCTION IsVisibleWindow
+		LPARAMETERS pln_Handle
+		
+		LOCAL lnHandle
+		lnHandle = pln_Handle
+		RETURN BITAND(This.GetWindowLong(lnHandle, GWL_STYLE), WS_VISIBLE) = WS_VISIBLE
+	ENDFUNC
+	
+	*** <summary>
+	*** Get System Processes 
+	*** </summary>
+	*** <param name="plA_Processes">Pointer to Array</param>
+	*** <param name="plc_Name">Process name</param>
+	*** <remarks></remarks>
+	FUNCTION GetSystemProcesses
+		LPARAMETERS plA_Processes, plc_Name
+		
+		LOCAL loLocator, loWMI, lnX, lcName, plcWhere, LOCCPWRSHL
+		lcName		= IIF(TYPE('plc_Name') == 'C', ALLTRIM(plc_Name),'')
+		plcWhere	= ''
+		loLocator 	= CREATEOBJECT('WBEMScripting.SWBEMLocator')
+		loWMI		= loLocator.ConnectServer() 
+		loWMI.Security_.ImpersonationLevel = 3  		&& Impersonate
+		
+		IF NOT EMPTY(lcName)
+			plcWhere = TEXTMERGE("WHERE Name = '<<lcName>>'")
+		ENDIF
+		
+		LOCCPWRSHL = ""
+		TEXT TO LOCCPWRSHL NOSHOW TEXTMERGE PRETEXT 2 
+			SELECT * FROM Win32_Process <<plcWhere>>
+		ENDTEXT 
+		loProcesses	= loWMI.ExecQuery(LOCCPWRSHL)
+		
+		Dimension plA_Processes[loProcesses.Count]
+
+		lnX = 1
+		FOR EACH loProcess in loProcesses
+			plA_Processes[lnX] = CREATEOBJECT("empty")
+			ADDPROPERTY(plA_Processes[lnX],"CreationClassName"			, loProcess.CreationClassName								)
+			ADDPROPERTY(plA_Processes[lnX],"Caption"					, loProcess.Caption											)
+			ADDPROPERTY(plA_Processes[lnX],"CommandLine"				, loProcess.CommandLine										)
+			ADDPROPERTY(plA_Processes[lnX],"CreationDate"				, loProcess.CreationDate									)
+			ADDPROPERTY(plA_Processes[lnX],"CSCreationClassName"		, loProcess.CSCreationClassName								)
+			ADDPROPERTY(plA_Processes[lnX],"CSName"						, loProcess.CSName											)
+			ADDPROPERTY(plA_Processes[lnX],"Description"				, loProcess.Description										)
+			ADDPROPERTY(plA_Processes[lnX],"ExecutablePath"				, loProcess.ExecutablePath									)
+			ADDPROPERTY(plA_Processes[lnX],"ExecutionState"				, loProcess.ExecutionState									)
+			ADDPROPERTY(plA_Processes[lnX],"Handle"						, loProcess.Handle											)
+			ADDPROPERTY(plA_Processes[lnX],"HandleCount"				, loProcess.HandleCount										)
+			ADDPROPERTY(plA_Processes[lnX],"InstallDate"				, loProcess.InstallDate										)
+			ADDPROPERTY(plA_Processes[lnX],"KernelModeTime"				, loProcess.KernelModeTime									)
+			ADDPROPERTY(plA_Processes[lnX],"MaximumWorkingSetSize"		, loProcess.MaximumWorkingSetSize							)
+			ADDPROPERTY(plA_Processes[lnX],"MinimumWorkingSetSize"		, loProcess.MinimumWorkingSetSize							)
+			ADDPROPERTY(plA_Processes[lnX],"Name"						, loProcess.Name											)
+			ADDPROPERTY(plA_Processes[lnX],"OSCreationClassName"		, loProcess.OSCreationClassName								)
+			ADDPROPERTY(plA_Processes[lnX],"OSName"						, loProcess.OSName											)
+			ADDPROPERTY(plA_Processes[lnX],"OtherOperationCount"		, loProcess.OtherOperationCount								)
+			ADDPROPERTY(plA_Processes[lnX],"OtherTransferCount"			, loProcess.OtherTransferCount								)
+			ADDPROPERTY(plA_Processes[lnX],"PageFaults"					, loProcess.PageFaults										)
+			ADDPROPERTY(plA_Processes[lnX],"PageFileUsage"				, loProcess.PageFileUsage									)
+			ADDPROPERTY(plA_Processes[lnX],"ParentProcessID"			, loProcess.ParentProcessID									)
+			ADDPROPERTY(plA_Processes[lnX],"PeakPageFileUsage"			, loProcess.PeakPageFileUsage								)
+			ADDPROPERTY(plA_Processes[lnX],"PeakVirtualSize"			, loProcess.PeakVirtualSize									)
+			ADDPROPERTY(plA_Processes[lnX],"PeakWorkingSetSize"			, loProcess.PeakWorkingSetSize								)
+			ADDPROPERTY(plA_Processes[lnX],"Priority"					, loProcess.Priority										)
+			ADDPROPERTY(plA_Processes[lnX],"PrivatePageCount"			, loProcess.PrivatePageCount								)
+			ADDPROPERTY(plA_Processes[lnX],"ProcessID"					, loProcess.ProcessId										)
+			ADDPROPERTY(plA_Processes[lnX],"QuotaNonPagedPoolUsage"		, loProcess.QuotaNonPagedPoolUsage							)
+			ADDPROPERTY(plA_Processes[lnX],"QuotaPagedPoolUsage"		, loProcess.QuotaPagedPoolUsage								)
+			ADDPROPERTY(plA_Processes[lnX],"QuotaPeakNonPagedPoolUsage"	, loProcess.QuotaPeakNonPagedPoolUsage						)
+			ADDPROPERTY(plA_Processes[lnX],"QuotaPeakPagedPoolUsage"	, loProcess.QuotaPeakPagedPoolUsage							)
+			ADDPROPERTY(plA_Processes[lnX],"ReadOperationCount"			, loProcess.ReadOperationCount								)
+			ADDPROPERTY(plA_Processes[lnX],"ReadTransferCount"			, loProcess.ReadTransferCount								)
+			ADDPROPERTY(plA_Processes[lnX],"SessionId"					, loProcess.SessionId										)
+			ADDPROPERTY(plA_Processes[lnX],"Status"						, loProcess.Status											)
+			ADDPROPERTY(plA_Processes[lnX],"TerminationDate"			, loProcess.TerminationDate									)
+			ADDPROPERTY(plA_Processes[lnX],"ThreadCount"				, loProcess.ThreadCount										)
+			ADDPROPERTY(plA_Processes[lnX],"UserModeTime"				, loProcess.UserModeTime									)
+			ADDPROPERTY(plA_Processes[lnX],"VirtualSize"				, loProcess.VirtualSize										)
+			ADDPROPERTY(plA_Processes[lnX],"WindowsVersion"				, loProcess.WindowsVersion									)
+			ADDPROPERTY(plA_Processes[lnX],"WorkingSetSize"				, loProcess.WorkingSetSize									)
+			ADDPROPERTY(plA_Processes[lnX],"WriteOperationCount"		, loProcess.WriteOperationCount								)
+			ADDPROPERTY(plA_Processes[lnX],"WriteTransferCount"			, loProcess.WriteTransferCount								)
+			ADDPROPERTY(plA_Processes[lnX],"UserName"					, This.GetUserInfoFromSessionID(loProcess.SessionId,"User")	)
+			ADDPROPERTY(plA_Processes[lnX],"WindowInfo[1]"				, .null.													)
+			
+			If Lower(plA_Processes[lnX].UserName) == Lower(GetEnv("username"))
+				Local laWindow(1)
+				This.GetWindowByProcessID(plA_Processes[lnX].ProcessID, @laWindow)
+				
+				Dimension plA_Processes[lnX].WindowInfo[Alen(laWindow)]
+				
+				Local lnY
+				lnY = 1
+				For lnY = 1 to Alen(laWindow)
+					plA_Processes[lnX].WindowInfo[lnY] = laWindow[lnY]
+				EndFor 
+				
+			EndIf
+			
+		    lnX = lnX + 1
+		NEXT
+		
+		RETURN loProcesses.Count
+	ENDFUNC
+	
+	
+	*** <summary>
+	*** Get Logged Users
+	*** </summary>
+	*** <param name="plA_AllUsers">Pointer to Array</param>
+	*** <remarks></remarks>
 	FUNCTION GetLoggedUsers
 		Lparameters plA_AllUsers
 		Local loLocator, loWMI, loProcesses, lnX
@@ -78,13 +277,14 @@ DEFINE CLASS WinClass AS Custom
 			lnX = lnX + 1
 		ENDFOR
 	
+		RETURN loProcesses.Count
 	Endfunc
 	
 	*** <summary>
 	*** Get user current Session ID
 	*** </summary>
 	*** <remarks></remarks>
-	FUNCTION GetCurrentSessionID && In development
+	FUNCTION GetConsoleSessionID 
 	    LOCAL nSessionID
 	    nSessionID = This.WTSGetActiveConsoleSessionId()
 	    RETURN nSessionID
@@ -272,6 +472,114 @@ DEFINE CLASS WinClass AS Custom
 	* |  |                                     Instantiated from DLLs, OCXs and etc...                                     |  | *
 	* V  V                                                                                                                 V  V *
 	*****************************************************************************************************************************
+	
+	*** <summary>
+	*** Returns Window Caption
+	*** </summary>
+	*** <param name="pln_Handle"Window Handle></param>
+	*** <remarks></remarks>
+	Hidden Procedure GetWindowText
+		LPARAMETERS pln_Handle
+
+		DECLARE INTEGER GetWindowText IN user32.dll as WinClass_GetWindowText INTEGER hWnd, STRING @lpString, INTEGER nMaxCount
+		
+		LOCAL lcTitle, nMaxLength, lnHandle
+		nMaxLength = 255
+		lnHandle = pln_Handle
+		lcTitle = SPACE(nMaxLength)
+		WinClass_GetWindowText(lnHandle, @lcTitle, nMaxLength)
+		lcTitle = ALLTRIM(CHRtran(lcTitle,CHR(0),''))
+		
+		CLEAR dlls WinClass_GetWindowText
+		
+		RETURN lcTitle
+	ENDFUNC
+
+	*** <summary>
+	*** Returns Window Process ID
+	*** </summary>
+	*** <param name="pln_Handle">Window Handle</param>
+	*** <remarks></remarks>
+	Hidden Procedure GetWindowThreadProcessId
+		LPARAMETERS pln_Handle
+		
+		DECLARE INTEGER GetWindowThreadProcessId IN user32.dll AS WinClass_GetWindowThreadProcessId INTEGER, INTEGER @
+		
+		LOCAL lnHandle, nWindowProcessID
+		STORE 0 TO lnHandle, nWindowProcessID
+		
+		lnHandle = pln_Handle
+		
+		WinClass_GetWindowThreadProcessId(lnHandle, @nWindowProcessID)
+		
+		CLEAR DLLS WinClass_GetWindowThreadProcessId
+		
+		RETURN nWindowProcessID
+	ENDfunc
+
+	*** <summary>
+	*** Returns Styles of the Windows
+	*** </summary>
+	*** <param name="pln_Handle">Window Handle</param>
+	*** <param name="pln_Style">Type of response</param>
+	*** <remarks></remarks>
+	Hidden Procedure GetWindowLong
+		LPARAMETERS pln_Handle, pln_Style
+		DECLARE INTEGER GetWindowLong IN user32.dll as WinClass_GetWindowLong INTEGER hWnd, INTEGER nIndex
+		
+		LOCAL lnHandle, lnStyle, lnLong
+		lnHandle = pln_Handle
+		lnStyle = pln_Style 
+		
+		lnLong = WinClass_GetWindowLong(lnHandle, lnStyle)
+		
+		CLEAR DLLS WinClass_GetWindowLong
+		
+		RETURN lnLong
+	ENDFUNC
+
+	*** <summary>
+	*** Returns the Windows Handle from class name and window name
+	*** </summary>
+	*** <param name="plc_ClassName">Class Name</param>
+	*** <param name="plc_WindowName">Window Name</param>
+	*** <remarks></remarks>
+	Hidden Procedure FindWindow
+		LPARAMETERS plc_ClassName, plc_WindowName
+		
+		DECLARE INTEGER FindWindow	IN WIN32API AS WinClass_FindWindow	STRING lpClassName	, STRING lpWindowName
+		
+		LOCAL lnHandle, lcClassName, lcWindowName
+		lcClassName 	= plc_ClassName
+		lcWindowName	= plc_WindowName
+	    lnHandle 		= WinClass_FindWindow(lcClassName, lcWindowName)
+		
+		CLEAR DLLS WinClass_FindWindow
+		
+		RETURN lnHandle
+	ENDFUNC
+		
+	*** <summary>
+	*** Returns Window Handle by another window handle and its relation with the current window
+	*** </summary>
+	*** <param name="pln_Handle">Window Handle</param>
+	*** <param name="pln_Relation">Window Relation</param>
+	*** <remarks></remarks>
+	Hidden Procedure GetWindow
+		LPARAMETERS pln_Handle, pln_Relation
+		
+		DECLARE INTEGER GetWindow	IN WIN32API as WinClass_GetWindow	INTEGER hWnd , INTEGER uCmd
+
+		LOCAL lnHandle, lnRelation, lnNextWin_Handle
+		lnHandle = pln_Handle
+		lnRelation = pln_Relation
+		
+		lnNextWin_Handle = WinClass_GetWindow(lnHandle, lnRelation)
+
+		CLEAR DLLS WinClass_GetWindow
+		
+		RETURN lnNextWin_Handle
+	EndFunc
 	
 	*** <summary>
 	*** Get User Current Session ID
