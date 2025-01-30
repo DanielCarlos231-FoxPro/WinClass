@@ -13,7 +13,7 @@ winClaas = CreateObject("WinClass")
 *MessageBox(winClaas.GetConsoleSessionID())
 *****************************************
 LOCAL loAllProcesses(1)
-winClaas.GetSystemProcesses(@loAllProcesses, "As_Retag.exe")
+winClaas.GetSystemProcesses(@loAllProcesses, "vfp8.exe")
 ******************************************
 *LOCAL aWindowHandles(1)
 *MESSAGEBOX(winClaas.GetWindowByProcessID(19580, @aWindowHandles))
@@ -171,6 +171,10 @@ DEFINE CLASS WinClass AS Custom
 			SELECT * FROM Win32_Process <<plcWhere>>
 		ENDTEXT 
 		loProcesses	= loWMI.ExecQuery(LOCCPWRSHL)
+		
+		IF loProcesses.Count <= 0
+			RETURN loProcesses.Count 
+		ENDIF
 		
 		Dimension plA_Processes[loProcesses.Count]
 
